@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+title: "Plots and data for: Canadian language attitudes from 'coast to coast to coast'"
+message: "If you use this code or data, please cite the article below."
+type: dataset
+authors:
+  - family-names: Dollinger
+    given-names: Stefan
+    orcid: https://orcid.org/0000-0001-5582-5139
+    affiliation: The University of British Columbia
+  - family-names: Hinrichs
+    given-names: Lars
+    orcid: https://orcid.org/0000-0003-3679-1927
+    affiliation: The University of Texas at Austin
+version: 1.0.0
+date-released: 2025-01-29
+url: https://dollinger-hinrichs-2025.netlify.app
+preferred-citation:
+  type: article
+  authors:
+    - family-names: Dollinger
+      given-names: Stefan
+    - family-names: Hinrichs
+      given-names: Lars
+  title: "Canadian language attitudes from 'coast to coast to coast': On the pluricentricity of English"
+  journal: Australian Journal of Linguistics
+  volume: 46
+  issue: 2
+  year: 2026
