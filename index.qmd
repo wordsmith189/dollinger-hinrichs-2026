@@ -1,0 +1,664 @@
+---
+title: "Plots for: Canadian language attitudes from 'coast to coast to coast'"
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
+author:
+  - name: "Stefan Dollinger"
+    affiliation: "The University of British Columbia"
+    email: "stefan.dollinger@ubc.ca"
+    orcid: "0000-0001-5582-5139" 
+  - name: "Lars Hinrichs"
+    affiliation: "The University of Texas at Austin"
+    email: "lh@utexas.edu"
+    orcid: "0000-0003-3679-1927"
+format: 
+  html:
+    code-fold: true
+editor: source
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(pacman)
+p_load(rio, tidyverse, 
+       janitor, gt, tm,
+       patchwork, showtext,
+       sysfonts, scales, knitr
+       )
+
+font_add_google("Roboto", "roboto")
+showtext_auto()
+
+# helper for saving high-res figures
+activate_fonts_for_saving <- function() {
+  font_add_google("Roboto", "roboto")
+  showtext_auto()
+  showtext_opts(dpi = 600)
+}
+
+df <- import("data/df_cleaned.csv", trust=T) %>% 
+  as_tibble() 
+
+can_regions <- c("BC", "AB", "SK", "MB", "ON", "QC",
+                  "NB", "NS", "PE", "NL", "TR", "US", "UK")
+```
+
+
+```{r}
+#| label: fig-age-gender
+#| fig-cap: "Distribution of age and gender among those whose formative years were spent in Canada."
+#| fig-width: 6
+#| fig-height: 3
+
+# age and gender distribution
+
+df_age <- df %>%
+  filter(!is.na(age), !is.na(gender)) %>%
+  mutate(gender = factor(gender, levels = c("female", "male", "other")))
+
+df_counts <- df_age %>%
+  count(age, gender, name = "n")
+
+ggplot(df_counts, aes(x = age, y = n, colour = gender)) +
+  geom_line(linewidth = 2, alpha = 0.6) +
+  scale_color_grey(start=0.2, end=.9, name = NULL) +
+  labs(x = "Age", y = "N respondents", title = "") +
+  theme_classic(base_family = "roboto", base_size = 12) +
+  theme(
+    legend.text = element_text(family = "roboto"),    
+    legend.title = element_text(family = "roboto"),
+    plot.title.position = "plot"
+  )
+```
+
+
+```{r}
+#| label: fig-various-questions-on-autonomy
+#| fig-cap: "Likert-scale responses to questions on the linguistic autonomy of CanE among the Canadian residents."
+#| fig-width: 9
+#| fig-height: 3.2
+
+# likert responses on autonomy questions
+
+myvars_short <- c("dictionary", "cdn_way", "distinct", "spell", "spell_uni", "software")
+
+question_long_names <- c(
+  "dictionary"  = "Would you use a free digital\ndictionary of CanE?",
+  "cdn_way"     = "Is there a Canadian way\nof speaking English?",
+  "distinct"    = "Is Canadian English a distinct\nkind of English?",
+  "spell"       = "Do you think Canadian\nspelling is important?",
+  "spell_uni"   = "Should Cdn universities\nencourage Cdn English\nspelling?",
+  "software"    = "Should software settings\ninclude a Canadian\nEnglish option?"
+)
+
+response_colors_grey <- c(
+  "Definitely yes"    = "grey20",
+  "(Probably) yes"    = "grey35",
+  "Neither yes or no" = "grey60",
+  "(Probably) no"     = "grey80",
+  "Definitely not"    = "white",
+  "Yes"               = "grey20",
+  "No"                = "white",
+  "Don't know"        = "grey60"
+)
+
+likert_levels <- c("Definitely not", "(Probably) no", "Neither yes or no", 
+                   "(Probably) yes", "Definitely yes")
+three_way_levels <- c("No", "Don't know", "Yes")
+
+# remap different response formats to a common scale
+standardize_responses <- function(question, response) {
+  case_when(
+    question == "spell" ~ case_when(
+      response == "very important" ~ "Definitely yes",
+      response == "important" ~ "(Probably) yes",
+      response == "neither unimportant nor important" ~ "Neither yes or no",
+      response == "unimportant" ~ "(Probably) no",
+      response == "very unimportant" ~ "Definitely not",
+      .default = response
+    ),
+    question == "dictionary" ~ case_when(
+      response == "definitely yes" ~ "Definitely yes",
+      response == "yes" ~ "(Probably) yes",
+      response == "neither yes or no" ~ "Neither yes or no",
+      response == "no" ~ "(Probably) no",
+      response == "definitely not" ~ "Definitely not",
+      .default = response
+    ),
+    question == "spell_uni" ~ case_when(
+      response == "definitely yes" ~ "Definitely yes",
+      response == "probably yes" ~ "(Probably) yes",
+      response == "might or might not" ~ "Neither yes or no",
+      response == "probably not" ~ "(Probably) no",
+      response == "definitely not" ~ "Definitely not",
+      .default = response
+    ),
+    question %in% c("cdn_way", "distinct") ~ case_when(
+      response == "definitely yes" ~ "Definitely yes",
+      response == "probably yes" ~ "(Probably) yes",
+      response == "probably not" ~ "(Probably) no",
+      response == "definitely not" ~ "Definitely not",
+      .default = response
+    ),
+    question == "software" ~ case_when(
+      response == "yes" ~ "Yes",
+      response == "no" ~ "No",
+      .default = response
+    ),
+    .default = response
+  )
+}
+
+df_long_summary <- df %>% 
+  pivot_longer(cols = all_of(myvars_short), 
+               names_to = "Question_Short", 
+               values_to = "Response_Original") %>%
+  mutate(Response = standardize_responses(Question_Short, Response_Original)) %>%
+  filter(!is.na(Response)) %>%
+  mutate(
+    Response = factor(Response, levels = c(likert_levels, three_way_levels), ordered = TRUE),
+    Question = factor(Question_Short, levels = myvars_short, labels = question_long_names)
+  ) %>%
+  group_by(Question, Response, Question_Short) %>% 
+  summarise(Count = n(), .groups = 'drop') %>%
+  group_by(Question) %>%
+  mutate(
+    Total = sum(Count), 
+    Percentage = Count / Total, 
+    Percent_Label = scales::percent(Percentage, accuracy = 1)
+  ) %>%
+  ungroup()
+
+p <- df_long_summary %>%
+  ggplot(aes(x = Response, y = Percentage, fill = Response)) +
+  geom_col(width = 0.6, color="grey30") +
+  geom_text(aes(label = Percent_Label), family = "roboto", vjust = -0.5, size = 3.5) +
+  # add labels inside bars for the binary question
+  geom_text(family = "roboto", 
+            data = . %>% filter(Question_Short == "software"), 
+            aes(label = Response, y = Percentage / 2), 
+            color = "white", fontface = "bold", size = 3.5) +
+  facet_wrap(~ Question, ncol = 6, scales = "free_x", strip.position = "bottom") + 
+  scale_fill_manual(values = response_colors_grey, breaks = likert_levels, drop = TRUE) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), 
+                     expand = expansion(mult = c(0, 0.15))) +
+  labs(x = NULL, y = NULL, fill = NULL) +
+  theme_classic(base_family = "roboto", base_size = 12) +
+  theme(
+    legend.text = element_text(family = "roboto"),
+    axis.line.y = element_blank(), 
+    axis.ticks.y = element_blank(), 
+    axis.text.y = element_blank(),
+    axis.text.x = element_blank(), 
+    axis.ticks.x = element_blank(), 
+    axis.line = element_blank(),
+    legend.position = "top", 
+    legend.justification = "center", 
+    legend.direction = "horizontal",
+    legend.title = element_blank(), 
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 7.2, hjust = 0.5)
+  )
+
+print(p)
+```
+
+
+```{r}
+#| label: fig-dictionaries
+#| fig-cap: "Canadian dictionary titles and the phrase 'Canadian English' in the Canadian press, 1977-2024."
+#| fig-width: 11
+#| fig-height: 4.9
+#| message: false
+#| warning: false
+
+# dictionary usage and press mentions over time
+
+dat1 <- import("data/data_fig_3_1.csv", header = TRUE) 
+rownames(dat1) <- dat1[[1]]
+dat1 <- dat1[-1]
+dat1 <- dat1 %>% t() %>% as.data.frame()
+dat1 <- dat1 %>% 
+  rownames_to_column(var = "period") %>% 
+  pivot_longer(cols = (2:4), names_to = "dictionary", values_to = "frequency")
+
+dat2 <- import("data/data_fig_3_2.csv", header = TRUE) %>% 
+  t() %>% 
+  as.data.frame() %>% 
+  slice(2:n()) %>% 
+  rename(frequency = 1) %>% 
+  rownames_to_column(var = "period") %>% 
+  mutate(frequency = as.numeric(frequency))
+
+p1 <- dat1 %>% 
+  ggplot(aes(period, frequency, colour = dictionary, group = dictionary)) +
+  geom_line(linewidth = 2) +
+  labs(title = "\"Canadian English\" in dictionaries, 1977-2024", x=NULL, y=NULL) +
+  scale_color_grey(start = 0.3, end = 0.85, name = NULL) +
+  theme_classic(base_family = "roboto") +
+  theme(
+    legend.text = element_text(family = "roboto"), 
+    legend.title = element_text(family = "roboto"),
+    legend.position = "bottom"
+  )
+
+p2 <- dat2 %>% 
+  ggplot(aes(period, frequency, group=1)) +
+  geom_line(linewidth = 2, color="grey35") +
+  geom_label(aes(label = frequency), vjust = -0.5, size = 3) +
+  labs(title = "\"Canadian English\" in the press, 1980-2024", x=NULL, y=NULL) +
+  theme_classic(base_family = "roboto") +
+  theme(
+    legend.text = element_text(family = "roboto"), 
+    legend.title = element_text(family = "roboto")
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
+
+p1 + p2 + plot_layout(ncol = 2)
+```
+
+
+```{r}
+#| label: fig-stheard-by-region
+#| fig-cap: "Responses to 'Have you heard of the term (Standard) Canadian English?' by region of formative years."
+#| fig-width: 9
+#| fig-height: 6.2
+
+# familiarity with StCanE by region, with chi-square significance
+
+df_filtered <- df %>% 
+  filter(!region=="other", st_heard %in% c("yes", "no"))
+
+df_counts <- df_filtered %>%
+  group_by(region, st_heard) %>% 
+  summarise(n = n(), .groups = "drop") %>%
+  spread(st_heard, n, fill = 0)
+
+# run chi-square for each region
+chi_square_results <- df_counts %>%
+  filter(yes > 0 & no > 0) %>% 
+  rowwise() %>%
+  mutate(
+    chi2_test = list(janitor::chisq.test(c(yes, no))), 
+    chi2 = chi2_test$statistic,
+    p_value = chi2_test$p.value,
+    significance = case_when(
+      p_value < 0.0001 ~ "****", 
+      p_value < 0.001 ~ "***",
+      p_value < 0.01 ~ "**", 
+      p_value < 0.05 ~ "*", 
+      TRUE ~ ""
+    ),
+    p_value = sprintf("%.4f", chi2_test$p.value)
+  ) %>%
+  select(region, chi2, p_value, significance)
+
+df_filtered <- df %>% 
+  filter(!region=="other", !is.na(st_heard))
+
+df_percent <- df_filtered %>%
+  group_by(region, st_heard) %>% 
+  summarise(n = n(), .groups = "drop") %>%
+  group_by(region) %>% 
+  mutate(percent = n / sum(n) * 100)
+
+region_counts <- df_filtered %>% 
+  group_by(region) %>% 
+  summarise(n_total = n())
+
+df_percent_labeled <- df_percent %>%
+  left_join(region_counts, by = "region") %>%
+  mutate(region_label = paste0(region, " (n=", n_total, ")")) %>%
+  left_join(chi_square_results, by = "region") %>% 
+  mutate(region_label = paste0(region_label, " ", significance))
+
+ggplot(df_percent_labeled, aes(x = st_heard, y = percent, fill = st_heard)) +
+  geom_bar(stat = "identity", width = .55, color="grey30") +
+  facet_wrap(~ region_label, ncol = 5) +
+  labs(
+    title = "Have you heard of the term \"(Standard) Canadian English\"?",
+    subtitle = "Region of formative years",
+    caption = "Significance coding based on chi-square test of \"yes\" vs. \"no\" responses\np < 0.0001 ~ ****, p < 0.001 ~ ***, p < 0.01 ~ **, p < 0.05 ~ *",
+    y = NULL, x = NULL, fill = NULL
+  ) +
+  scale_y_continuous(labels = scales::percent_format(scale = 1), limits = c(0, 75)) +
+  scale_fill_grey(start=0.15, end=.85) +
+  theme_classic(base_family = "roboto") +
+  theme(
+    legend.position = "none", 
+    plot.title.position = "plot", 
+    plot.caption.position = "plot",
+    plot.caption = element_text(hjust = 0),
+    strip.background = element_rect(fill = "grey30", color = "grey30"), 
+    strip.text = element_text(color = "white", face = "bold")
+  )
+```
+
+
+```{r}
+#| label: fig-stheard-by-multiling
+#| fig-cap: "Responses to 'Have you heard of the term (Standard) Canadian English?' by linguistic background."
+#| fig-width: 6
+#| fig-height: 3.5
+#| message: false
+#| warning: false
+
+# familiarity with StCanE by mono- vs. multilingual
+# filter to yes/no only (excluding "not sure")
+
+df_filtered <- df %>% 
+  filter(
+    !region=="other", 
+    !province %in% c("United States", "other"),
+    st_heard %in% c("yes", "no"),
+    !is.na(umultiling)
+  )
+
+df_plot_data <- df_filtered %>%
+  count(umultiling, st_heard) %>%
+  group_by(umultiling) %>%
+  mutate(Percentage = n / sum(n), N_Label = n) %>% 
+  ungroup()
+
+df_plot_data %>%
+  ggplot(aes(x = st_heard, y = Percentage, fill = umultiling)) +
+  geom_col(width = 0.5, position = "dodge", color="grey30") +
+  geom_text(
+    aes(label = N_Label), 
+    position = position_dodge(width = 0.5),
+    vjust = -0.5, size = 3.5, family = "roboto"
+  ) +
+  scale_fill_grey(
+    start = 0.8, end = 0.3,
+    labels = c("monolingual", "bi- or multilingual")
+  ) +
+  coord_cartesian(ylim = c(0, 0.65)) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    fill = "Linguistic Background", 
+    caption = "Bar height corresponds to %.", 
+    y = NULL, x = NULL
+  ) +
+  theme_classic(base_family = "roboto") +
+  theme(
+    legend.text = element_text(family = "roboto"), 
+    legend.title = element_text(family = "roboto")
+  )
+```
+
+
+```{r}
+#| label: fig-describe-StCanE
+#| fig-cap: "Probabilities of being able to describe the standard (lower line) and of self-reported familiarity with the concept but inability to describe it."
+#| fig-width: 6
+#| fig-height: 3.5
+#| message: false
+#| warning: false
+
+# ability to describe StCanE by age (loess smoothed)
+
+df_plot <- df %>% 
+  filter(!is.na(st_descr), !is.na(age)) %>%
+  mutate(st_descr = droplevels(factor(st_descr))) 
+
+lev <- levels(df_plot$st_descr)   
+
+df_plot <- df_plot %>% 
+  mutate(is_lvl2 = as.numeric(st_descr == lev[2]))  
+
+lo_fit <- loess(is_lvl2 ~ age, data = df_plot, span = 0.2)   
+
+grid <- tibble(age = seq(min(df_plot$age), max(df_plot$age), by = 1)) %>%
+  mutate(
+    prob_lvl2 = predict(lo_fit, newdata = .), 
+    prob_lvl1 = 1 - prob_lvl2
+  ) %>%
+  pivot_longer(cols = starts_with("prob_"), names_to = "st_descr", values_to = "prob") %>%
+  mutate(
+    st_descr = case_match(st_descr,
+      "prob_lvl1" ~ "Yes, I know what it is.",
+      "prob_lvl2" ~ "Yes, but I can't describe it well."
+    ),
+    st_descr = factor(st_descr) %>% fct_rev()
+  )
+
+grid %>% 
+  ggplot(aes(age, prob, colour = st_descr)) +
+  geom_line(linewidth = 1.6) +
+  scale_colour_grey(start=.2, end=.75, name = NULL) +
+  labs(x = "Age", y = "Est. probability") +
+  theme_classic(base_family = "roboto") +
+  theme(
+    legend.text = element_text(family = "roboto"), 
+    legend.title = element_text(family = "roboto")
+  )
+```
+
+
+```{r}
+#| label: fig-wayofspeaking
+#| fig-cap: "\"Canadian way of speaking\" by residential biography (left) and gender (right)."
+#| message: false
+#| fig-width: 11
+#| fig-height: 4.9
+
+# canadian way of speaking: biography and gender
+
+dat7a <- read_csv("data/figure7a.csv") %>%  
+  pivot_longer(cols = -1, names_to = "age", values_to = "percent") %>%  
+  rename(category = 1)  
+
+p7a <- dat7a %>% 
+  ggplot(aes(age, percent, group = category, color = category)) +
+  geom_line(linewidth = 2) +
+  scale_color_grey(name = NULL) +
+  scale_y_continuous(labels = percent_format(scale = 1), limits = c(0,90)) +
+  labs(y=NULL) +
+  theme_classic(base_family = "roboto") +
+  theme(
+    legend.text = element_text(family = "roboto", size = rel(1.15)),    
+    legend.title = element_text(family = "roboto"), 
+    legend.position = "top"
+  )
+
+dat7b <- read_csv("data/figure7b.csv") %>%  
+  pivot_longer(cols = -1, names_to = "age", values_to = "percent") %>%  
+  rename(gender = 1) %>% 
+  mutate(gender = if_else(gender == "non-b/other", "other", gender))
+
+p7b <- dat7b %>% 
+  ggplot(aes(age, percent, group = gender, color = gender)) +
+  geom_line(linewidth = 2) +
+  scale_color_grey(name = NULL) +
+  scale_y_continuous(labels = percent_format(scale = 1), limits = c(0,90)) +
+  labs(y=NULL) +
+  theme_classic(base_family = "roboto") +
+  theme(
+    legend.text = element_text(family = "roboto", size = rel(1.15)),    
+    legend.title = element_text(family = "roboto"), 
+    legend.position = "top"
+  )
+
+p7a + p7b + plot_layout(ncol = 2)
+```
+
+
+```{r}
+#| label: fig-slai-edu
+#| fig-cap: "Standard Language Attitude Index by education."
+#| fig-width: 8
+#| fig-height: 4.2
+#| message: false
+#| warning: false
+
+# SLAI by education level
+# need to prep variables and compute the index first
+
+df_canada <- df %>%
+  filter(region %in% can_regions) %>% 
+  select(region, gender, -region_previous, everything()) %>%
+  mutate(
+    gender = factor(gender, levels = c("female", "male", "other")), 
+    region_previous = NULL
+  )
+
+# rescale 4-point items to 5-point
+rescale_4_to_5 <- function(x) { 1 + (x - 1) * (4 / 3) }
+
+df_canada <- df_canada %>%
+  mutate(
+    st_heard = str_trim(st_heard), 
+    spell_uni = str_trim(spell_uni),
+    distinct = str_trim(distinct), 
+    cdn_way = str_trim(cdn_way), 
+    spell = str_trim(spell),
+    
+    # recode to numeric
+    st_heard_num = case_match(st_heard, 
+      "no" ~ 1, "not sure" ~ 3, "yes" ~ 5, .default = NA),
+    spell_uni_num = case_match(spell_uni, 
+      "definitely not" ~ 1, "probably not" ~ 2, "might or might not" ~ 3, 
+      "probably yes" ~ 4, "definitely yes" ~ 5, .default = NA),
+    distinct_num = case_match(distinct, 
+      "definitely not" ~ 1, "probably not" ~ 2, 
+      "probably yes" ~ 3, "definitely yes" ~ 4, .default = NA),
+    cdn_way_num = case_match(cdn_way, 
+      "definitely not" ~ 1, "probably not" ~ 2, 
+      "probably yes" ~ 3, "definitely yes" ~ 4, .default = NA),
+    spell_num = case_match(spell, 
+      "very unimportant" ~ 1, "unimportant" ~ 2, "neither unimportant nor important" ~ 3, 
+      "important" ~ 4, "very important" ~ 5, .default = NA),
+    
+    # rescale and compute index
+    spell_uni_scaled = spell_uni_num,
+    distinct_scaled = rescale_4_to_5(distinct_num), 
+    cdn_way_scaled = rescale_4_to_5(cdn_way_num),
+    slai = rowMeans(cbind(spell_uni_scaled, distinct_scaled, cdn_way_scaled, spell_num), na.rm = TRUE),
+    
+    edu_comp = str_trim(edu_comp),
+    edu_comp = factor(edu_comp, levels = c(
+      "other", "elementary school", "high school",
+      "undergraduate degree", "graduate degree", "postgraduate degree"
+    ))
+  ) %>% 
+  filter(!edu_comp == "other")
+
+df_plot <- df_canada %>% 
+  filter(!is.na(slai), !is.na(edu_comp), !is.na(gender), !is.na(umultiling))
+
+df_plot %>% 
+  ggplot(aes(x = slai, y = edu_comp, group=gender)) +
+  geom_jitter(aes(color = gender), width = 0.1, alpha = 0.5, size = .7) +
+  geom_boxplot(aes(group = edu_comp), fill = "grey90", width = 0.5, 
+               outlier.shape = NA, alpha=.8) +
+  scale_color_grey(name=NULL, start=0, end=.75) +
+  labs(y = NULL, x = "SLAI (1–5)") +
+  theme_classic(base_family = "roboto") +
+  theme(
+    legend.text = element_text(family = "roboto"), 
+    legend.title = element_text(family = "roboto")
+  )
+```
+
+
+```{r}
+#| label: fig-slai-edu-gender-multiling
+#| fig-cap: "Standard Language Attitude Index by education, gender, and linguistic background."
+#| fig-width: 8
+#| fig-height: 4.5
+#| message: false
+#| warning: false
+
+# SLAI broken down by mono/multilingual
+
+df_plot %>% 
+  mutate(
+    umultiling = if_else(umultiling == "no", "monolingual", "bi-/multilingual"),
+    umultiling = factor(umultiling, levels = c("monolingual", "bi-/multilingual"))
+  ) %>% 
+  ggplot(aes(x = edu_comp, y = slai, color = gender, group = gender)) +
+  stat_summary(fun = mean, geom = "point", position = position_dodge(0.5)) +
+  stat_summary(fun = mean, geom = "line", position = position_dodge(0.5), linewidth=1.2) +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2, position = position_dodge(0.5)) +
+  scale_color_grey(start=0.2, end=.9, name=NULL) +
+  labs(x = NULL, y = "SLAI") +
+  facet_grid(~umultiling) +
+  theme_classic(base_family = "roboto") +
+  theme(
+    legend.text = element_text(family = "roboto"), 
+    legend.title = element_text(family = "roboto"),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    strip.background = element_rect(fill = "grey30", color = "grey30"), 
+    strip.text = element_text(color = "white", face="bold")
+  )
+```
+
+
+```{r}
+#| label: fig-eui-cdn-way
+#| fig-cap: "EUI in three groups and formative years in Canada."
+#| fig-width: 7
+#| fig-height: 5
+#| message: false
+
+# EUI and "canadian way of speaking"
+
+df <- import("data/df_cleaned.csv", trust=T) %>% 
+  mutate(eui = as.integer(eui))
+
+df_eui <- df %>%
+  mutate(
+    eui_bin = case_when(
+      eui == 0 ~ "Monolingual (0)",
+      eui >= 1 & eui <= 2 ~ "Some non-English (1-2)",
+      eui >= 3 & eui <= 15 ~ "Considerable non-English (3-15)",
+      TRUE ~ NA_character_
+    ),
+    eui_bin = factor(eui_bin, levels = c(
+      "Monolingual (0)", "Some non-English (1-2)", "Considerable non-English (3-15)"
+    ))
+  ) %>% 
+  filter(!is.na(eui_bin), !is.na(st_heard)) 
+
+levs <- df_eui %>% 
+  pull(cdn_way) %>% 
+  na.omit() %>% 
+  unique() %>% 
+  .[c(4,1,2,3)]
+
+df_eui_way <- df_eui %>%
+  select(eui_bin, cdn_way, region) %>%
+  mutate(cdn_way = factor(cdn_way, levels = levs)) %>% 
+  na.omit()
+
+data_percent <- df_eui_way %>%
+  group_by(eui_bin, cdn_way) %>% 
+  summarise(count = n(), .groups = "drop") %>%
+  group_by(eui_bin) %>%
+  mutate(percentage = count / sum(count) * 100)
+
+total_counts <- data_percent %>%
+  group_by(eui_bin) %>%
+  summarise(total_count = paste0("n = ", format(sum(count), big.mark = ",")), .groups = "drop") 
+
+data_percent %>% 
+  ggplot(aes(x = eui_bin, y = percentage, fill = cdn_way)) +
+  geom_bar(stat = "identity", position = "stack", width = .6) +
+  geom_text(
+    family = "roboto", 
+    data = total_counts, 
+    aes(x = eui_bin, y = 100, label = total_count), 
+    vjust = -0.5, inherit.aes = FALSE
+  ) +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+  scale_fill_grey(start = 0.2, end=0.9) +
+  labs(x = "EUI Category", y = NULL, fill = "Is there a Canadian way\nof speaking English?") +
+  theme_classic(base_family = "roboto") +
+  theme(
+    legend.text = element_text(family = "roboto"), 
+    legend.title = element_text(family = "roboto"),
+    plot.title.position = "plot", 
+    axis.text.x = element_text(angle = 12, vjust = .55)
+  )
+```
