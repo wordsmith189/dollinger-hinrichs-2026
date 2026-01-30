@@ -50,6 +50,7 @@ can_regions <- c("BC", "AB", "SK", "MB", "ON", "QC",
 #| fig-cap: "Distribution of age and gender among those whose formative years were spent in Canada."
 #| fig-width: 6
 #| fig-height: 3
+#| warning: false
 
 # age and gender distribution
 
@@ -78,6 +79,7 @@ ggplot(df_counts, aes(x = age, y = n, colour = gender)) +
 #| fig-cap: "Likert-scale responses to questions on the linguistic autonomy of CanE among the Canadian residents."
 #| fig-width: 9
 #| fig-height: 3.2
+#| warning: false
 
 # likert responses on autonomy questions
 
