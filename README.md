@@ -1,5 +1,7 @@
 # Canadian Language Attitudes: Plots and Data
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18426405.svg)](https://doi.org/10.5281/zenodo.18426405)
+
 Code and data for reproducing the figures in:
 
 > Dollinger, S., & Hinrichs, L. (2026). Canadian language attitudes from "coast to coast to coast": On the pluricentricity of English. In J. Walker, D. Loakes & K. Gnevsheva (eds.), *Perceptions and attitudes in multilingual contexts*. Special issue, *Australian Journal of Linguistics*, 46(2).
