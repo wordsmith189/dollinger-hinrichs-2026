@@ -13,11 +13,14 @@ author:
 format: 
   html:
     code-fold: true
+    repository-url: https://github.com/wordsmith189/dollinger-hinrichs-2026
+    repo-actions: [source]
 editor: source
 ---
 
 :::{.callout-tip appearance="simple"}
 **DOI for this repository:** [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18426405.svg)](https://doi.org/10.5281/zenodo.18426405)
+<br>**Github repository:** [https://github.com/wordsmith189/dollinger-hinrichs-2026](https://github.com/wordsmith189/dollinger-hinrichs-2026)
 :::
 
 ```{r}
